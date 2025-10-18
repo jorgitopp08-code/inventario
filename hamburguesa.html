@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="es">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Gestión de pedidos - Hamburguesería</title>
+    <style>
+        body {
+            font-family: Segoe UI, Roboto, Arial;
+            margin: 20px;
+            color: #222
+        }
+
+        h1 {
+            margin-bottom: 6px
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto
+        }
+
+        form {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            align-items: end;
+            margin-bottom: 16px
+        }
+
+        label {
+            display: flex;
+            flex-direction: column;
+            font-size: 14px
+        }
+
+        input[type=number] {
+            width: 120px;
+            padding: 6px;
+            border: 1px solid #bbb;
+            border-radius: 4px
+        }
+
+        button {
+            padding: 8px 12px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer
+        }
+
+        button.primary {
+            background: #0b74de;
+            color: #fff
+        }
+
+        button.warn {
+            background: #f0ad4e;
+            color: #fff
+        }
+
+        button.danger {
+            background: #d9534f;
+            color: #fff
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 8px
+        }
+
+        th,
+        td {
+            padding: 8px;
+            border: 1px solid #e1e1e1;
+            text-align: center
+        }
+
+        .actions button {
+            margin-right: 6px
+        }
+
+        .summary {
+            margin-top: 12px;
+            font-weight: 600
+        }
+
+        .small {
+            font-size: 13px;
+            color: #555
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>Pedidos - Hamburguesería</h1>
+        <p class="small">Productos: Sencilla, Mixta, Doble carne. Cada pedido contiene las cantidades de cada producto.
+        </p>
+
+        <form id="orderForm">
+            <label>
+                Sencilla
+                <input id="sencilla" type="number" min="0" value="0" required>
+            </label>
+            <label>
+                Mixta
+                <input id="mixta" type="number" min="0" value="0" required>
+            </label>
+            <label>
+                Doble carne
+                <input id="doble" type="number" min="0" value="0" required>
+            </label>
+
+            <input id="orderId" type="hidden" value="">
+
+            <div style="display:flex;gap:8px">
+                <button id="addBtn" type="submit" class="primary">Agregar pedido</button>
+                <button id="saveBtn" type="button" class="primary" style="display:none">Guardar cambios</button>
+                <button id="cancelBtn" type="button" style="display:none">Cancelar</button>
+                <button id="clearAll" type="button" class="warn">Eliminar todos</button>
+            </div>
+        </form>
+
+        <table id="ordersTable" aria-live="polite">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Sencilla</th>
+                    <th>Mixta</th>
+                    <th>Doble carne</th>
+                    <th>Total unidades</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+
+        <div class="summary" id="totals">Total pedidos: 0 — Unidades totales: 0</div>
+    </div>
+
+    <script>
+        const KEY_ORDERS = 'hamburgueseria_pedidos_v1';
+        const KEY_NEXT_ID = 'hamburgueseria_next_id_v1';
+
+        const form = document.getElementById('orderForm');
+        const sencillaInput = document.getElementById('sencilla');
+        const mixtaInput = document.getElementById('mixta');
+        const dobleInput = document.getElementById('doble');
+        const orderIdInput = document.getElementById('orderId');
+
+        const addBtn = document.getElementById('addBtn');
+        const saveBtn = document.getElementById('saveBtn');
+        const cancelBtn = document.getElementById('cancelBtn');
+        const clearAllBtn = document.getElementById('clearAll');
+
+        const tableBody = document.querySelector('#ordersTable tbody');
+        const totalsEl = document.getElementById('totals');
+
+        let orders = loadOrders();
+
+        render();
+
+        form.addEventListener('submit', (e) => {
+            e.preventDefault();
+            if (orderIdInput.value) return; // avoid double action when editing
+            const newOrder = readForm();
+            if (!newOrder) return;
+            addOrder(newOrder);
+            form.reset();
+            sencillaInput.value = mixtaInput.value = dobleInput.value = 0;
+        });
+
+        saveBtn.addEventListener('click', () => {
+            const id = orderIdInput.value;
+            if (!id) return;
+            const updated = readForm();
+            if (!updated) return;
+            updated.id = Number(id);
+            updateOrder(updated);
+            exitEditMode();
+        });
+
+        cancelBtn.addEventListener('click', () => exitEditMode());
+
+        clearAllBtn.addEventListener('click', () => {
+            if (!confirm('Eliminar todos los pedidos?')) return;
+            orders = [];
+            saveOrders();
+            render();
+        });
+
+        tableBody.addEventListener('click', (e) => {
+            const btn = e.target.closest('button');
+            if (!btn) return;
+            const id = Number(btn.dataset.id);
+            if (btn.classList.contains('edit')) startEdit(id);
+            if (btn.classList.contains('delete')) {
+                if (!confirm('Eliminar pedido #' + id + '?')) return;
+                deleteOrder(id);
+            }
+        });
+
+        function readForm() {
+            const s = Number(sencillaInput.value || 0);
+            const m = Number(mixtaInput.value || 0);
+            const d = Number(dobleInput.value || 0);
+            if (s < 0 || m < 0 || d < 0) {
+                alert('Las cantidades deben ser números mayores o iguales a 0.');
+                return null;
+            }
+            return { sencilla: s, mixta: m, doble: d };
+        }
+
+        function addOrder(order) {
+            order.id = getNextId();
+            orders.push(order);
+            saveOrders();
+            render();
+        }
+
+        function updateOrder(updated) {
+            const idx = orders.findIndex(o => o.id === updated.id);
+            if (idx === -1) return;
+            orders[idx] = updated;
+            saveOrders();
+            render();
+        }
+
+        function deleteOrder(id) {
+            orders = orders.filter(o => o.id !== id);
+            saveOrders();
+            render();
+            if (orderIdInput.value == id) exitEditMode();
+        }
+
+        function startEdit(id) {
+            const o = orders.find(p => p.id === id);
+            if (!o) return;
+            orderIdInput.value = String(o.id);
+            sencillaInput.value = o.sencilla;
+            mixtaInput.value = o.mixta;
+            dobleInput.value = o.doble;
+            toggleEditMode(true);
+        }
+
+        function exitEditMode() {
+            orderIdInput.value = '';
+            form.reset();
+            sencillaInput.value = mixtaInput.value = dobleInput.value = 0;
+            toggleEditMode(false);
+        }
+
+        function toggleEditMode(isEditing) {
+            addBtn.style.display = isEditing ? 'none' : '';
+            saveBtn.style.display = isEditing ? '' : 'none';
+            cancelBtn.style.display = isEditing ? '' : 'none';
+        }
+
+        function render() {
+            tableBody.innerHTML = '';
+            let totalUnits = 0;
+            orders.forEach(o => {
+                const units = o.sencilla + o.mixta + o.doble;
+                totalUnits += units;
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+          <td>#${o.id}</td>
+          <td>${o.sencilla}</td>
+          <td>${o.mixta}</td>
+          <td>${o.doble}</td>
+          <td>${units}</td>
+          <td class="actions">
+            <button class="edit" data-id="${o.id}">Editar</button>
+            <button class="delete danger" data-id="${o.id}">Eliminar</button>
+          </td>
+        `;
+                tableBody.appendChild(tr);
+            });
+            totalsEl.textContent = `Total pedidos: ${orders.length} — Unidades totales: ${totalUnits}`;
+        }
+
+        function saveOrders() {
+            localStorage.setItem(KEY_ORDERS, JSON.stringify(orders));
+        }
+
+        function loadOrders() {
+            try {
+                const raw = localStorage.getItem(KEY_ORDERS);
+                return raw ? JSON.parse(raw) : [];
+            } catch {
+                return [];
+            }
+        }
+
+        function getNextId() {
+            let n = Number(localStorage.getItem(KEY_NEXT_ID) || 1);
+            localStorage.setItem(KEY_NEXT_ID, String(n + 1));
+            return n;
+        }
+
+        // Inicializar next id si no existe
+        if (!localStorage.getItem(KEY_NEXT_ID)) localStorage.setItem(KEY_NEXT_ID, '1');
+    </script>
+</body>
+
+</html>
