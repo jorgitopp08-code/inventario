@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="es">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Gestión de inventario - Inventario</title>
+    <style>
+        body {
+            font-family: Segoe UI, Roboto, Arial;
+            margin: 20px;
+            color: #222
+        }
+
+        h1 {
+            margin-bottom: 6px
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto
+        }
+
+        form {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            align-items: end;
+            margin-bottom: 16px
+        }
+
+        label {
+            display: flex;
+            flex-direction: column;
+            font-size: 14px
+        }
+
+        input[type=number],
+        input[type=text],
+        select {
+            width: 180px;
+            padding: 6px;
+            border: 1px solid #bbb;
+            border-radius: 4px
+        }
+
+        button {
+            padding: 8px 12px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer
+        }
+
+        button.primary {
+            background: #0b74de;
+            color: #fff
+        }
+
+        button.warn {
+            background: #f0ad4e;
+            color: #fff
+        }
+
+        button.danger {
+            background: #d9534f;
+            color: #fff
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 8px
+        }
+
+        th,
+        td {
+            padding: 8px;
+            border: 1px solid #e1e1e1;
+            text-align: center
+        }
+
+        .actions button {
+            margin-right: 6px
+        }
+
+        .summary {
+            margin-top: 12px;
+            font-weight: 600
+        }
+
+        .small {
+            font-size: 13px;
+            color: #555
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>Inventario - Gestión de productos</h1>
+        <p class="small">Gestione productos con nombre, cantidad y bodega (Principal, Secundaria, Temporal).</p>
+
+        <form id="productForm">
+            <label>
+                Nombre
+                <input id="name" type="text" value="" required>
+            </label>
+            <label>
+                Cantidad
+                <input id="quantity" type="number" min="0" value="0" required>
+            </label>
+            <label>
+                Bodega
+                <select id="bodega">
+                    <option value="Principal">Principal</option>
+                    <option value="Secundaria">Secundaria</option>
+                    <option value="Temporal">Temporal</option>
+                </select>
+            </label>
+
+            <input id="productId" type="hidden" value="">
+
+            <div style="display:flex;gap:8px">
+                <button id="addBtn" type="submit" class="primary">Agregar producto</button>
+                <button id="saveBtn" type="button" class="primary" style="display:none">Guardar cambios</button>
+                <button id="cancelBtn" type="button" style="display:none">Cancelar</button>
+                <button id="clearAll" type="button" class="warn">Eliminar todos</button>
+            </div>
+        </form>
+
+        <table id="productsTable" aria-live="polite">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Nombre</th>
+                    <th>Cantidad</th>
+                    <th>Bodega</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+
+        <div class="summary" id="totals">Total productos: 0 — Unidades totales: 0</div>
+    </div>
+
+    <script>
+        const KEY_PRODUCTS = 'inventario_productos_v1';
+        const KEY_NEXT_ID = 'inventario_next_id_v1';
+
+        const form = document.getElementById('productForm');
+        const nameInput = document.getElementById('name');
+        const quantityInput = document.getElementById('quantity');
+        const bodegaSelect = document.getElementById('bodega');
+        const productIdInput = document.getElementById('productId');
+
+        const addBtn = document.getElementById('addBtn');
+        const saveBtn = document.getElementById('saveBtn');
+        const cancelBtn = document.getElementById('cancelBtn');
+        const clearAllBtn = document.getElementById('clearAll');
+
+        const tableBody = document.querySelector('#productsTable tbody');
+        const totalsEl = document.getElementById('totals');
+
+        let products = loadProducts();
+
+        render();
+
+        form.addEventListener('submit', (e) => {
+            e.preventDefault();
+            if (productIdInput.value) return; // evitar doble acción al editar
+            const newProduct = readForm();
+            if (!newProduct) return;
+            addProduct(newProduct);
+            form.reset();
+            quantityInput.value = 0;
+            bodegaSelect.value = 'Principal';
+        });
+
+        saveBtn.addEventListener('click', () => {
+            const id = productIdInput.value;
+            if (!id) return;
+            const updated = readForm();
+            if (!updated) return;
+            updated.id = Number(id);
+            updateProduct(updated);
+            exitEditMode();
+        });
+
+        cancelBtn.addEventListener('click', () => exitEditMode());
+
+        clearAllBtn.addEventListener('click', () => {
+            if (!confirm('Eliminar todos los productos?')) return;
+            products = [];
+            saveProducts();
+            render();
+            exitEditMode();
+        });
+
+        tableBody.addEventListener('click', (e) => {
+            const btn = e.target.closest('button');
+            if (!btn) return;
+            const id = Number(btn.dataset.id);
+            if (btn.classList.contains('edit')) startEdit(id);
+            if (btn.classList.contains('delete')) {
+                if (!confirm('Eliminar producto #' + id + '?')) return;
+                deleteProduct(id);
+            }
+        });
+
+        function readForm() {
+            const name = String(nameInput.value || '').trim();
+            const qty = Number(quantityInput.value || 0);
+            const bodega = String(bodegaSelect.value || 'Principal');
+            if (!name) {
+                alert('El nombre del producto es requerido.');
+                return null;
+            }
+            if (!Number.isFinite(qty) || qty < 0) {
+                alert('La cantidad debe ser un número mayor o igual a 0.');
+                return null;
+            }
+            return { name, quantity: qty, bodega };
+        }
+
+        function addProduct(product) {
+            product.id = getNextId();
+            products.push(product);
+            saveProducts();
+            render();
+        }
+
+        function updateProduct(updated) {
+            const idx = products.findIndex(p => p.id === updated.id);
+            if (idx === -1) return;
+            products[idx] = updated;
+            saveProducts();
+            render();
+        }
+
+        function deleteProduct(id) {
+            products = products.filter(p => p.id !== id);
+            saveProducts();
+            render();
+            if (productIdInput.value == id) exitEditMode();
+        }
+
+        function startEdit(id) {
+            const p = products.find(p => p.id === id);
+            if (!p) return;
+            productIdInput.value = String(p.id);
+            nameInput.value = p.name;
+            quantityInput.value = p.quantity;
+            bodegaSelect.value = p.bodega;
+            toggleEditMode(true);
+        }
+
+        function exitEditMode() {
+            productIdInput.value = '';
+            form.reset();
+            quantityInput.value = 0;
+            bodegaSelect.value = 'Principal';
+            toggleEditMode(false);
+        }
+
+        function toggleEditMode(isEditing) {
+            addBtn.style.display = isEditing ? 'none' : '';
+            saveBtn.style.display = isEditing ? '' : 'none';
+            cancelBtn.style.display = isEditing ? '' : 'none';
+        }
+
+        function render() {
+            tableBody.innerHTML = '';
+            let totalUnits = 0;
+            products.forEach(p => {
+                totalUnits += p.quantity;
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+          <td>#${p.id}</td>
+          <td>${escapeHtml(p.name)}</td>
+          <td>${p.quantity}</td>
+          <td>${p.bodega}</td>
+          <td class="actions">
+            <button class="edit" data-id="${p.id}">Editar</button>
+            <button class="delete danger" data-id="${p.id}">Eliminar</button>
+          </td>
+        `;
+                tableBody.appendChild(tr);
+            });
+            totalsEl.textContent = `Total productos: ${products.length} — Unidades totales: ${totalUnits}`;
+        }
+
+        function saveProducts() {
+            localStorage.setItem(KEY_PRODUCTS, JSON.stringify(products));
+        }
+
+        function loadProducts() {
+            try {
+                const raw = localStorage.getItem(KEY_PRODUCTS);
+                return raw ? JSON.parse(raw) : [];
+            } catch {
+                return [];
+            }
+        }
+
+        function getNextId() {
+            let n = Number(localStorage.getItem(KEY_NEXT_ID) || 1);
+            localStorage.setItem(KEY_NEXT_ID, String(n + 1));
+            return n;
+        }
+
+        // Inicializar next id si no existe
+        if (!localStorage.getItem(KEY_NEXT_ID)) localStorage.setItem(KEY_NEXT_ID, '1');
+
+        // pequeña función para prevenir inyección de HTML en nombres
+        function escapeHtml(str) {
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+    </script>
+</body>
+
+</html>
