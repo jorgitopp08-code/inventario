@@ -1,14 +1,145 @@
-<html>
+<!DOCTYPE html>
+<html lang="es">
 
 <head>
-    <title>inventario</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SUPERENVIOS DE COLOMBIA</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 30px;
+            background-color: #f9f9f9;
+        }
+
+        h1 {
+            color: #333;
+        }
+
+        label {
+            display: block;
+            margin-top: 10px;
+        }
+
+        input,
+        textarea,
+        button {
+            width: 100%;
+            padding: 8px;
+            margin-top: 5px;
+            box-sizing: border-box;
+        }
+
+        button {
+            width: auto;
+            margin-right: 10px;
+        }
+
+        table {
+            width: 100%;
+            margin-top: 20px;
+            border-collapse: collapse;
+            background: #fff;
+        }
+
+        th,
+        td {
+            border: 1px solid #ccc;
+            padding: 8px;
+            text-align: left;
+        }
+
+        th {
+            background-color: #f0f0f0;
+        }
+
+        .acciones button {
+            margin-right: 5px;
+        }
+    </style>
 </head>
 
 <body>
-    <h1>bienvenido a mi inventario</h1>
-    <p> pagina del sistema de inventario</p>
+    <h1>SUPERENVIOS DE COLOMBIA</h1>
+    <form id="envioForm">
+        <label for="destinatario">Nombre del destinatario:</label>
+        <input type="text" id="destinatario" required />
 
+        <label for="direccion">Dirección de envío (calle, ciudad, país):</label>
+        <input type="text" id="direccion" required />
 
-    <body>
+        <label for="descripcion">Descripción (contenido / observaciones):</label>
+        <textarea id="descripcion" rows="3" required></textarea>
+
+        <br><br>
+        <button type="submit">Agregar envío</button>
+        <button type="button" onclick="limpiarFormulario()">Limpiar</button>
+    </form>
+
+    <h2>Lista de Envíos</h2>
+    <table id="tablaEnvios">
+        <thead>
+            <tr>
+                <th>Destinatario</th>
+                <th>Dirección</th>
+                <th>Descripción</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody id="cuerpoTabla">
+            <tr id="mensajeVacio">
+                <td colspan="4">No hay envíos. Crea uno usando el formulario.</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <script>
+        const form = document.getElementById("envioForm");
+        const tabla = document.getElementById("cuerpoTabla");
+        const mensajeVacio = document.getElementById("mensajeVacio");
+
+        form.addEventListener("submit", function (e) {
+            e.preventDefault();
+
+            const destinatario = document.getElementById("destinatario").value.trim();
+            const direccion = document.getElementById("direccion").value.trim();
+            const descripcion = document.getElementById("descripcion").value.trim();
+
+            if (!destinatario || !direccion || !descripcion) return;
+
+            if (mensajeVacio) mensajeVacio.remove();
+
+            const fila = document.createElement("tr");
+
+            fila.innerHTML = `
+        <td>${destinatario}</td>
+        <td>${direccion}</td>
+        <td>${descripcion}</td>
+        <td class="acciones">
+          <button onclick="eliminarFila(this)">Eliminar</button>
+        </td>
+      `;
+
+            tabla.appendChild(fila);
+            form.reset();
+        });
+
+        function limpiarFormulario() {
+            form.reset();
+        }
+
+        function eliminarFila(boton) {
+            const fila = boton.parentElement.parentElement;
+            fila.remove();
+
+            if (tabla.rows.length === 0) {
+                const filaVacia = document.createElement("tr");
+                filaVacia.id = "mensajeVacio";
+                filaVacia.innerHTML = `<td colspan="4">No hay envíos. Crea uno usando el formulario.</td>`;
+                tabla.appendChild(filaVacia);
+            }
+        }
+    </script>
+</body>
 
 </html>
