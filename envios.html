@@ -2,82 +2,113 @@
 <html lang="es">
 
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta charset="UTF-8">
     <title>SUPERENVIOS DE COLOMBIA</title>
     <style>
         body {
             font-family: Arial, sans-serif;
             margin: 30px;
-            background-color: #f9f9f9;
+            background-color: #f4f4f4;
         }
 
         h1 {
             color: #333;
         }
 
-        label {
-            display: block;
-            margin-top: 10px;
+        form,
+        table {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
         }
 
-        input,
-        textarea,
-        button {
+        input[type="text"],
+        textarea {
             width: 100%;
-            padding: 8px;
-            margin-top: 5px;
-            box-sizing: border-box;
+            padding: 10px;
+            margin-top: 8px;
+            margin-bottom: 16px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
         }
 
         button {
-            width: auto;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
             margin-right: 10px;
+            cursor: pointer;
+        }
+
+        .agregar {
+            background-color: #28a745;
+            color: white;
+        }
+
+        .limpiar {
+            background-color: #dc3545;
+            color: white;
+        }
+
+        .editar-btn,
+        .eliminar-btn {
+            padding: 5px 10px;
+            border: none;
+            border-radius: 3px;
+            margin: 2px;
+            cursor: pointer;
+        }
+
+        .editar-btn {
+            background-color: #ffc107;
+            color: #000;
+        }
+
+        .eliminar-btn {
+            background-color: #dc3545;
+            color: white;
         }
 
         table {
             width: 100%;
-            margin-top: 20px;
             border-collapse: collapse;
-            background: #fff;
         }
 
         th,
         td {
-            border: 1px solid #ccc;
-            padding: 8px;
+            padding: 12px;
+            border-bottom: 1px solid #ccc;
             text-align: left;
         }
 
-        th {
-            background-color: #f0f0f0;
-        }
-
-        .acciones button {
-            margin-right: 5px;
+        .mensaje {
+            color: #888;
+            font-style: italic;
         }
     </style>
 </head>
 
 <body>
+
     <h1>SUPERENVIOS DE COLOMBIA</h1>
-    <form id="envioForm">
-        <label for="destinatario">Nombre del destinatario:</label>
-        <input type="text" id="destinatario" required />
 
-        <label for="direccion">Dirección de envío (calle, ciudad, país):</label>
-        <input type="text" id="direccion" required />
+    <form id="formulario">
+        <label>Nombre del destinatario:</label>
+        <input type="text" id="destinatario" required>
 
-        <label for="descripcion">Descripción (contenido / observaciones):</label>
+        <label>Dirección de envío (calle, ciudad, país):</label>
+        <input type="text" id="direccion" required>
+
+        <label>Descripción (contenido / observaciones):</label>
         <textarea id="descripcion" rows="3" required></textarea>
 
-        <br><br>
-        <button type="submit">Agregar envío</button>
-        <button type="button" onclick="limpiarFormulario()">Limpiar</button>
+        <button type="submit" class="agregar" id="btnAgregar">Agregar envío</button>
+        <button type="button" class="limpiar" onclick="limpiarFormulario()">Limpiar</button>
     </form>
 
-    <h2>Lista de Envíos</h2>
-    <table id="tablaEnvios">
+    <table>
         <thead>
             <tr>
                 <th>Destinatario</th>
@@ -86,60 +117,92 @@
                 <th>Acciones</th>
             </tr>
         </thead>
-        <tbody id="cuerpoTabla">
+        <tbody id="listaEnvios">
             <tr id="mensajeVacio">
-                <td colspan="4">No hay envíos. Crea uno usando el formulario.</td>
+                <td colspan="4" class="mensaje">No hay envíos. Crea uno usando el formulario.</td>
             </tr>
         </tbody>
     </table>
 
     <script>
-        const form = document.getElementById("envioForm");
-        const tabla = document.getElementById("cuerpoTabla");
-        const mensajeVacio = document.getElementById("mensajeVacio");
+        const formulario = document.getElementById('formulario');
+        const listaEnvios = document.getElementById('listaEnvios');
+        const mensajeVacio = document.getElementById('mensajeVacio');
 
-        form.addEventListener("submit", function (e) {
+        let envioEditando = null;
+
+        formulario.addEventListener('submit', function (e) {
             e.preventDefault();
 
-            const destinatario = document.getElementById("destinatario").value.trim();
-            const direccion = document.getElementById("direccion").value.trim();
-            const descripcion = document.getElementById("descripcion").value.trim();
+            const destinatario = document.getElementById('destinatario').value.trim();
+            const direccion = document.getElementById('direccion').value.trim();
+            const descripcion = document.getElementById('descripcion').value.trim();
 
-            if (!destinatario || !direccion || !descripcion) return;
+            if (envioEditando) {
+                // Modo editar
+                envioEditando.cells[0].innerText = destinatario;
+                envioEditando.cells[1].innerText = direccion;
+                envioEditando.cells[2].innerText = descripcion;
+                envioEditando = null;
+                document.getElementById('btnAgregar').innerText = "Agregar envío";
+            } else {
+                // Agregar nuevo
+                const fila = listaEnvios.insertRow();
 
-            if (mensajeVacio) mensajeVacio.remove();
+                fila.insertCell(0).innerText = destinatario;
+                fila.insertCell(1).innerText = direccion;
+                fila.insertCell(2).innerText = descripcion;
 
-            const fila = document.createElement("tr");
+                const acciones = fila.insertCell(3);
 
-            fila.innerHTML = `
-        <td>${destinatario}</td>
-        <td>${direccion}</td>
-        <td>${descripcion}</td>
-        <td class="acciones">
-          <button onclick="eliminarFila(this)">Eliminar</button>
-        </td>
-      `;
+                const btnEditar = document.createElement('button');
+                btnEditar.innerText = 'Editar';
+                btnEditar.className = 'editar-btn';
+                btnEditar.onclick = () => editarEnvio(fila);
+                acciones.appendChild(btnEditar);
 
-            tabla.appendChild(fila);
-            form.reset();
+                const btnEliminar = document.createElement('button');
+                btnEliminar.innerText = 'Eliminar';
+                btnEliminar.className = 'eliminar-btn';
+                btnEliminar.onclick = () => eliminarEnvio(fila);
+                acciones.appendChild(btnEliminar);
+            }
+
+            limpiarFormulario();
+            actualizarMensaje();
         });
 
         function limpiarFormulario() {
-            form.reset();
+            formulario.reset();
+            envioEditando = null;
+            document.getElementById('btnAgregar').innerText = "Agregar envío";
         }
 
-        function eliminarFila(boton) {
-            const fila = boton.parentElement.parentElement;
-            fila.remove();
+        function editarEnvio(fila) {
+            envioEditando = fila;
+            document.getElementById('destinatario').value = fila.cells[0].innerText;
+            document.getElementById('direccion').value = fila.cells[1].innerText;
+            document.getElementById('descripcion').value = fila.cells[2].innerText;
+            document.getElementById('btnAgregar').innerText = "Guardar cambios";
+        }
 
-            if (tabla.rows.length === 0) {
-                const filaVacia = document.createElement("tr");
-                filaVacia.id = "mensajeVacio";
-                filaVacia.innerHTML = `<td colspan="4">No hay envíos. Crea uno usando el formulario.</td>`;
-                tabla.appendChild(filaVacia);
+        function eliminarEnvio(fila) {
+            if (confirm("¿Estás seguro de eliminar este envío?")) {
+                fila.remove();
+                limpiarFormulario();
+                actualizarMensaje();
+            }
+        }
+
+        function actualizarMensaje() {
+            if (listaEnvios.rows.length === 0) {
+                listaEnvios.appendChild(mensajeVacio);
+            } else {
+                mensajeVacio.remove();
             }
         }
     </script>
+
 </body>
 
 </html>
